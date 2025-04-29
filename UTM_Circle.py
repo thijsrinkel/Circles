@@ -1,0 +1,51 @@
+import streamlit as st
+import pyproj
+import numpy as np
+import pandas as pd
+
+# Define the circle generation function
+def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_points=17):
+    utm_proj = pyproj.Proj(proj='utm', zone=utm_zone, ellps='WGS84', datum='WGS84', south=False)
+    wgs84_proj = pyproj.Proj(proj='latlong', datum='WGS84')
+
+    lon, lat = pyproj.transform(utm_proj, wgs84_proj, easting, northing)
+
+    angles_deg = np.linspace(0, 360, num_points)
+    angles_rad = np.radians(angles_deg)
+    deg_per_meter = 1 / 111320
+    lat_offset = deg_per_meter * np.sin(angles_rad) * radius_m
+    lon_offset = deg_per_meter * np.cos(angles_rad) * radius_m
+
+    latitudes = lat + lat_offset
+    longitudes = lon + lon_offset
+
+    return pd.DataFrame({
+        "Angle (\u00b0)": angles_deg,
+        "Latitude": latitudes,
+        "Longitude": longitudes
+    })
+
+# Streamlit UI
+st.title("UTM to WGS84 Circle Generator")
+st.write("This tool converts a UTM coordinate to WGS84 and generates a circle of points around it.")
+
+# Input fields
+easting = st.number_input("Enter Easting (meters):", value=465177.689)
+northing = st.number_input("Enter Northing (meters):", value=5708543.612)
+utm_zone = st.number_input("Enter UTM Zone:", min_value=1, max_value=60, value=31)
+radius_m = st.number_input("Enter Radius (meters):", value=50)
+num_points = st.number_input("Number of Points:", min_value=3, value=17)
+
+if st.button("Generate Circle"):
+    circle_df = generate_circle_from_utm(easting, northing, utm_zone, radius_m, num_points)
+    st.success("Circle points generated!")
+    st.dataframe(circle_df)
+
+    # Download as CSV
+    csv = circle_df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="Download Circle Points as CSV",
+        data=csv,
+        file_name='circle_points.csv',
+        mime='text/csv'
+    )
