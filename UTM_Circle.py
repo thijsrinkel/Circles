@@ -62,7 +62,7 @@ if st.button("Generate Circle"):
         color='blue', weight=3
     ).add_to(m)
     folium.Marker(location=[circle_df['Latitude'][0], circle_df['Longitude'][0]], popup="Start/End").add_to(m)
-    st_folium(m, width=700, height=500)
+    _ = st_folium(m, width=700, height=500)
 
     # Download as CSV
     csv = circle_df.to_csv(index=False).encode('utf-8')
