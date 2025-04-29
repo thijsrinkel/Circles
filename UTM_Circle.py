@@ -46,6 +46,9 @@ apply_correction = st.checkbox("Apply Epoch 2025.5 Correction?", value=False)
 
 if st.button("Generate Circle"):
     circle_df = generate_circle_from_utm(easting, northing, utm_zone, radius_m, num_points, apply_epoch_correction=apply_correction)
+    # Add first point again to close the circle
+    circle_df = pd.concat([circle_df, circle_df.iloc[[0]]], ignore_index=True)
+    
     st.success("Circle points generated!")
     st.dataframe(circle_df)
 
@@ -57,3 +60,4 @@ if st.button("Generate Circle"):
         file_name='circle_points.csv',
         mime='text/csv'
     )
+
