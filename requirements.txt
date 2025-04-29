@@ -2,3 +2,5 @@ streamlit
 pyproj
 numpy
 pandas
+folium
+streamlit-folium
