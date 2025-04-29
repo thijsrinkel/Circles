@@ -3,12 +3,12 @@ import pyproj
 import numpy as np
 import pandas as pd
 
-# Define the circle generation function
+# Define the circle generation function (updated using pyproj.Transformer)
 def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_points=17):
-    utm_proj = pyproj.Proj(proj='utm', zone=utm_zone, ellps='WGS84', datum='WGS84', south=False)
-    wgs84_proj = pyproj.Proj(proj='latlong', datum='WGS84')
+    utm_crs = f"+proj=utm +zone={utm_zone} +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+    transformer = pyproj.Transformer.from_crs(utm_crs, "EPSG:4326", always_xy=True)
 
-    lon, lat = pyproj.transform(utm_proj, wgs84_proj, easting, northing)
+    lon, lat = transformer.transform(easting, northing)
 
     angles_deg = np.linspace(0, 360, num_points)
     angles_rad = np.radians(angles_deg)
@@ -20,7 +20,7 @@ def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_po
     longitudes = lon + lon_offset
 
     return pd.DataFrame({
-        "Angle (\u00b0)": angles_deg,
+        "Angle (°)": angles_deg,
         "Latitude": latitudes,
         "Longitude": longitudes
     })
