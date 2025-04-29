@@ -26,7 +26,7 @@ def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_po
     northings = northing + radius_m * np.sin(angles_rad)
 
     # Transform all UTM points to WGS84 lat/lon
-    lons, lats = transformer.transform(eastings, northings)
+    lons, lats = transformer.transform(np.array(eastings), np.array(northings))
 
     return pd.DataFrame({
         "Angle (°)": np.round(angles_deg, 6),
