@@ -2,6 +2,8 @@ import streamlit as st
 import pyproj
 import numpy as np
 import pandas as pd
+import folium
+from streamlit_folium import st_folium
 
 # Define the correct circle generation function (stay in UTM and then transform)
 def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_points=17, apply_epoch_correction=False):
@@ -46,11 +48,21 @@ apply_correction = st.checkbox("Apply Epoch 2025.5 Correction?", value=False)
 
 if st.button("Generate Circle"):
     circle_df = generate_circle_from_utm(easting, northing, utm_zone, radius_m, num_points, apply_epoch_correction=apply_correction)
-    # Add first point again to close the circle
+    # Add the first point again to close the loop
     circle_df = pd.concat([circle_df, circle_df.iloc[[0]]], ignore_index=True)
-    
+
     st.success("Circle points generated!")
     st.dataframe(circle_df)
+
+    # Map preview with Folium
+    midpoint = [circle_df['Latitude'].mean(), circle_df['Longitude'].mean()]
+    m = folium.Map(location=midpoint, zoom_start=17)
+    folium.PolyLine(
+        locations=list(zip(circle_df['Latitude'], circle_df['Longitude'])),
+        color='blue', weight=3
+    ).add_to(m)
+    folium.Marker(location=[circle_df['Latitude'][0], circle_df['Longitude'][0]], popup="Start/End").add_to(m)
+    st_folium(m, width=700, height=500)
 
     # Download as CSV
     csv = circle_df.to_csv(index=False).encode('utf-8')
@@ -60,4 +72,3 @@ if st.button("Generate Circle"):
         file_name='circle_points.csv',
         mime='text/csv'
     )
-
