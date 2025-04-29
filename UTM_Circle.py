@@ -3,7 +3,7 @@ import pyproj
 import numpy as np
 import pandas as pd
 
-# Define the circle generation function (updated using pyproj.Transformer)
+# Define the circle generation function (corrected longitude scaling)
 def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_points=17, apply_epoch_correction=False):
     utm_crs = f"+proj=utm +zone={utm_zone} +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
     transformer = pyproj.Transformer.from_crs(utm_crs, "EPSG:4326", always_xy=True)
@@ -16,23 +16,28 @@ def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_po
         east_shift_m = 0.025 * years_since_1984  # meters
         north_shift_m = 0.015 * years_since_1984  # meters
 
-        deg_per_meter = 1 / 111320
-        lat += north_shift_m * deg_per_meter
-        lon += east_shift_m * deg_per_meter
+        deg_per_meter_lat = 1 / 111320
+        deg_per_meter_lon = 1 / (111320 * np.cos(np.radians(lat)))
+
+        lat += north_shift_m * deg_per_meter_lat
+        lon += east_shift_m * deg_per_meter_lon
 
     angles_deg = np.linspace(0, 360, num_points)
     angles_rad = np.radians(angles_deg)
-    deg_per_meter = 1 / 111320
-    lat_offset = deg_per_meter * np.sin(angles_rad) * radius_m
-    lon_offset = deg_per_meter * np.cos(angles_rad) * radius_m
+
+    deg_per_meter_lat = 1 / 111320
+    deg_per_meter_lon = 1 / (111320 * np.cos(np.radians(lat)))
+
+    lat_offset = deg_per_meter_lat * np.sin(angles_rad) * radius_m
+    lon_offset = deg_per_meter_lon * np.cos(angles_rad) * radius_m
 
     latitudes = lat + lat_offset
     longitudes = lon + lon_offset
 
     return pd.DataFrame({
-        "Angle (°)": angles_deg,
-        "Latitude": latitudes,
-        "Longitude": longitudes
+        "Angle (°)": np.round(angles_deg, 6),
+        "Latitude": np.round(latitudes, 10),
+        "Longitude": np.round(longitudes, 10)
     })
 
 # Streamlit UI
