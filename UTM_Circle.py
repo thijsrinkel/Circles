@@ -3,46 +3,38 @@ import pyproj
 import numpy as np
 import pandas as pd
 
-# Define the circle generation function (corrected longitude scaling)
+# Define the correct circle generation function (stay in UTM and then transform)
 def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_points=17, apply_epoch_correction=False):
     utm_crs = f"+proj=utm +zone={utm_zone} +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
     transformer = pyproj.Transformer.from_crs(utm_crs, "EPSG:4326", always_xy=True)
-
-    lon, lat = transformer.transform(easting, northing)
 
     # Apply approximate epoch correction if needed (assume 2.5 cm/year eastward, 1.5 cm/year northward for Europe)
     if apply_epoch_correction:
         years_since_1984 = 2025.5 - 1984.0
         east_shift_m = 0.025 * years_since_1984  # meters
         north_shift_m = 0.015 * years_since_1984  # meters
-
-        deg_per_meter_lat = 1 / 111320
-        deg_per_meter_lon = 1 / (111320 * np.cos(np.radians(lat)))
-
-        lat += north_shift_m * deg_per_meter_lat
-        lon += east_shift_m * deg_per_meter_lon
+        easting += east_shift_m
+        northing += north_shift_m
 
     angles_deg = np.linspace(0, 360, num_points)
     angles_rad = np.radians(angles_deg)
 
-    deg_per_meter_lat = 1 / 111320
-    deg_per_meter_lon = 1 / (111320 * np.cos(np.radians(lat)))
+    # Generate points directly in UTM meters
+    eastings = easting + radius_m * np.cos(angles_rad)
+    northings = northing + radius_m * np.sin(angles_rad)
 
-    lat_offset = deg_per_meter_lat * np.sin(angles_rad) * radius_m
-    lon_offset = deg_per_meter_lon * np.cos(angles_rad) * radius_m
-
-    latitudes = lat + lat_offset
-    longitudes = lon + lon_offset
+    # Transform all UTM points to WGS84 lat/lon
+    lons, lats = transformer.transform(eastings, northings)
 
     return pd.DataFrame({
         "Angle (°)": np.round(angles_deg, 6),
-        "Latitude": np.round(latitudes, 10),
-        "Longitude": np.round(longitudes, 10)
+        "Latitude": np.round(lats, 10),
+        "Longitude": np.round(lons, 10)
     })
 
 # Streamlit UI
 st.title("UTM to WGS84 Circle Generator")
-st.write("This tool converts a UTM coordinate to WGS84 and generates a circle of points around it.")
+st.write("This tool converts a UTM coordinate to WGS84 and generates a true circle of points around it.")
 
 # Input fields
 easting = st.number_input("Enter Easting (meters):", value=465177.689)
