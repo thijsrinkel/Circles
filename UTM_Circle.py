@@ -39,12 +39,12 @@ st.title("UTM to WGS84 Circle Generator")
 st.write("This tool converts a UTM coordinate to WGS84 and generates a true circle of points around it.")
 
 # Input fields
-easting = st.number_input("Enter Easting (meters):", value=465177.689)
-northing = st.number_input("Enter Northing (meters):", value=5708543.612)
+easting = st.number_input("Enter Easting (meters):", value=)
+northing = st.number_input("Enter Northing (meters):", value=)
 utm_zone = st.number_input("Enter UTM Zone:", min_value=1, max_value=60, value=31)
 radius_m = st.number_input("Enter Radius (meters):", value=50)
 num_points = st.number_input("Number of Points:", min_value=3, value=17)
-apply_correction = st.checkbox("Apply Epoch 2025.5 Correction?", value=False)
+apply_correction = st.checkbox("Apply Epoch 2025.5 Correction?", value=True)
 
 if st.button("Generate Circle"):
     circle_df = generate_circle_from_utm(easting, northing, utm_zone, radius_m, num_points, apply_epoch_correction=apply_correction)
