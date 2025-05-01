@@ -38,6 +38,7 @@ def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_po
     return df, round(center_lat, 10), round(center_lon, 10)
 
 # --- Streamlit App ---
+st.image("tr-offshore-survey-logo-yellow-transparent-bg.png", width=150)
 st.title("UTM Point to WGS84 Circles")
 
 st.markdown(
