@@ -23,14 +23,12 @@ def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_po
     df = pd.DataFrame({
         "Angle (°)": np.round(angles_deg, 6),
         "Latitude": np.round(lats, 10),
-        "Longitude": np.round(lons, 10),
-        "Center Latitude": round(center_lat, 10),
-        "Center Longitude": round(center_lon, 10)
+        "Longitude": np.round(lons, 10)
     })
-    return df
+    return df, round(center_lat, 10), round(center_lon, 10)
 
 # --- Streamlit App ---
-st.title("UTM Circles to WGS84 (No Map)")
+st.title("UTM Circles to WGS84 (Stable Final Version)")
 
 st.markdown(
     "Paste UTM coordinates (Easting, Northing) below, one pair per line, comma- or space-separated.  \n"
@@ -67,20 +65,33 @@ if st.button("Generate Circles"):
 
     if coords:
         all_dfs = []
+        centers = []
+
         for idx, (e, n) in enumerate(coords):
-            df = generate_circle_from_utm(
+            df, lat_c, lon_c = generate_circle_from_utm(
                 e, n, utm_zone, radius_m, num_points, apply_epoch_correction=apply_correction
             )
             df["Circle ID"] = f"Circle {idx+1}"
             all_dfs.append(df)
+            centers.append({"Circle ID": f"Circle {idx+1}", "Latitude": lat_c, "Longitude": lon_c})
 
         final_df = pd.concat(all_dfs, ignore_index=True)
+        center_df = pd.DataFrame(centers)
+
         st.success(f"Generated {len(coords)} circle(s) with {num_points} points each.")
+        st.markdown("### Circle Coordinates")
         st.dataframe(final_df)
+
+        st.markdown("### WGS84 Center Coordinates (one per circle)")
+        st.dataframe(center_df)
 
         st.markdown("### 📋 Copy a Column")
         selected_col = st.selectbox("Select column to copy", final_df.columns)
-        st.text_area("Copy below:", "\n".join(map(str, final_df[selected_col])), height=200)
+        try:
+            copy_content = "\n".join(map(str, final_df[selected_col].dropna()))
+            st.text_area("Copy below:", copy_content, height=200)
+        except Exception as e:
+            st.warning(f"Unable to copy selected column: {e}")
 
         csv = final_df.to_csv(index=False).encode("utf-8")
         st.download_button("Download CSV", csv, "circle_points.csv", "text/csv")
