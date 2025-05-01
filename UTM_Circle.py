@@ -38,7 +38,7 @@ def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_po
     return df, round(center_lat, 10), round(center_lon, 10)
 
 # --- Streamlit App ---
-st.title("UTM Circles to WGS84 (One Table per Circle)")
+st.title("UTM Point to WGS84 Circles")
 
 st.markdown(
     "Paste UTM coordinates (Easting, Northing) below, one pair per line, comma- or space-separated.  \n"
