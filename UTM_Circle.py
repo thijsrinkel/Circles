@@ -10,7 +10,6 @@ def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_po
     utm_crs = f"EPSG:{32600 + utm_zone}"
     transformer = pyproj.Transformer.from_crs(utm_crs, "EPSG:4326", always_xy=True)
 
-    # Epoch correction
     if apply_epoch_correction:
         years_since_1984 = 2025.5 - 1984.0
         easting += 0.025 * years_since_1984
@@ -36,30 +35,41 @@ def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_po
 st.title("Multiple UTM Circles to WGS84")
 st.write("Generate multiple WGS84 circles from UTM centers with radius and epoch correction.")
 
+# Global input
 num_circles = st.number_input("Number of Circles", min_value=1, max_value=10, value=1)
 utm_zone = st.number_input("UTM Zone", min_value=1, max_value=60, value=31)
 radius_m = st.number_input("Radius (m)", value=50)
 num_points = st.number_input("Points per Circle", min_value=3, value=17)
 apply_correction = st.checkbox("Apply Epoch 2025.5 Correction", value=True)
 
-# Use form to preserve input state
+# --- Session state setup for persistent inputs ---
+if "circle_inputs" not in st.session_state:
+    st.session_state.circle_inputs = [{"e": 0.0, "n": 0.0} for _ in range(10)]
+
+# Extend if user requests more circles
+if len(st.session_state.circle_inputs) < num_circles:
+    st.session_state.circle_inputs.extend([{"e": 0.0, "n": 0.0}] * (num_circles - len(st.session_state.circle_inputs)))
+
+# --- Input Form ---
 with st.form("circle_form"):
-    circle_inputs = []
     for i in range(num_circles):
         with st.expander(f"Circle {i+1} Input"):
-            e = st.number_input(f"Easting {i+1}", key=f"e_{i}")
-            n = st.number_input(f"Northing {i+1}", key=f"n_{i}")
-            circle_inputs.append((e, n))
+            st.session_state.circle_inputs[i]["e"] = st.number_input(
+                f"Easting {i+1}", key=f"e_{i}", value=st.session_state.circle_inputs[i]["e"])
+            st.session_state.circle_inputs[i]["n"] = st.number_input(
+                f"Northing {i+1}", key=f"n_{i}", value=st.session_state.circle_inputs[i]["n"])
     submit = st.form_submit_button("Generate Circles")
 
-# On form submit
+# --- On Submit: Process All Circles ---
 if submit:
+    circle_inputs = [(entry["e"], entry["n"]) for entry in st.session_state.circle_inputs[:num_circles]]
     all_circles = []
-    map_center = [0, 0]
     m = folium.Map(location=[0, 0], zoom_start=2)
 
     for idx, (e, n) in enumerate(circle_inputs):
-        circle_df, lat_c, lon_c = generate_circle_from_utm(e, n, utm_zone, radius_m, num_points, apply_epoch_correction=apply_correction)
+        circle_df, lat_c, lon_c = generate_circle_from_utm(
+            e, n, utm_zone, radius_m, num_points, apply_epoch_correction=apply_correction
+        )
         circle_df["Circle ID"] = f"Circle {idx+1}"
         all_circles.append(circle_df)
 
