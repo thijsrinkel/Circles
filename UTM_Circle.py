@@ -33,7 +33,7 @@ def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_po
 
 
 # --- Streamlit App ---
-st.title("UTM Circles to WGS84 (Final Version - No Copy Box)")
+st.title("UTM Coordinate to WGS84 Circle")
 
 st.markdown(
     "Paste UTM coordinates (Easting, Northing) below, one pair per line, comma- or space-separated.  \n"
@@ -78,7 +78,7 @@ if st.button("Generate Circles"):
             )
             label = f"Circle {idx+1}"
             st.markdown(f"### {label} Coordinates")
-            st.dataframe(df, use_container_width=True)
+            st.dataframe(df, use_container_width=True, hide_index=True)
 
             df["Circle ID"] = label
             circle_tables.append(df)
@@ -87,7 +87,7 @@ if st.button("Generate Circles"):
         # Show centers table
         center_df = pd.DataFrame(center_rows)
         st.markdown("### WGS84 Center Coordinates")
-        st.dataframe(center_df)
+        st.dataframe(center_df, use_container_width=True, hide_index=True)
 
         # Download combined points CSV
         combined_df = pd.concat(circle_tables, ignore_index=True)
