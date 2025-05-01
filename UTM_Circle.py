@@ -7,7 +7,7 @@ from streamlit_folium import st_folium
 
 # Define the correct circle generation function (stay in UTM and then transform)
 def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_points=17, apply_epoch_correction=False):
-    utm_crs = f"+proj=utm +zone={utm_zone} +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+    utm_crs = f"EPSG:{32600 + utm_zone}"  # Proper UTM EPSG code (e.g., 32631 for zone 31N)
     transformer = pyproj.Transformer.from_crs(utm_crs, "EPSG:4326", always_xy=True)
 
     # Apply approximate epoch correction if needed (assume 2.5 cm/year eastward, 1.5 cm/year northward for Europe)
@@ -32,45 +32,40 @@ def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_po
         "Angle (°)": np.round(angles_deg, 6),
         "Latitude": np.round(lats, 10),
         "Longitude": np.round(lons, 10)
-    })
+    }), transformer.transform(easting, northing)  # Also return center in WGS84
+
 
 # Streamlit UI
 st.title("UTM to WGS84 Circle Generator")
 st.write("This tool converts a UTM coordinate to WGS84 and generates a true circle of points around it.")
 
 # Input fields
-easting = st.number_input("Enter Easting (meters):", value=0)
-northing = st.number_input("Enter Northing (meters):", value=0)
+easting = st.number_input("Enter Easting (meters):", value=465177.689)
+northing = st.number_input("Enter Northing (meters):", value=5708543.612)
 utm_zone = st.number_input("Enter UTM Zone:", min_value=1, max_value=60, value=31)
 radius_m = st.number_input("Enter Radius (meters):", value=50)
 num_points = st.number_input("Number of Points:", min_value=3, value=17)
-apply_correction = st.checkbox("Apply Epoch 2025.5 Correction?", value=False)
+apply_correction = st.checkbox("Apply Epoch 2025.5 Correction?", value=True)
 
 if st.button("Generate Circle"):
-    # Transform and display the center coordinate in WGS84
-    transformer = pyproj.Transformer.from_crs(f"EPSG:{32600 + utm_zone}", "EPSG:4326", always_xy=True)
-    lon_center, lat_center = transformer.transform(easting, northing)
-    st.markdown(f"**WGS84 Center Coordinate:**  
-Latitude: `{lat_center:.10f}`  
-Longitude: `{lon_center:.10f}`")
-    circle_df = generate_circle_from_utm(easting, northing, utm_zone, radius_m, num_points, apply_epoch_correction=apply_correction)
+    circle_df, (lon_center, lat_center) = generate_circle_from_utm(
+        easting, northing, utm_zone, radius_m, num_points, apply_epoch_correction=apply_correction
+    )
+
     # Add the first point again to close the loop
     circle_df = pd.concat([circle_df, circle_df.iloc[[0]]], ignore_index=True)
 
-    st.success("Circle points generated!")
-    st.dataframe(circle_df)
-    
-     # Transform and display the center coordinate in WGS84
-    transformer = pyproj.Transformer.from_crs(f"EPSG:{32600 + utm_zone}", "EPSG:4326", always_xy=True)
-    lon_center, lat_center = transformer.transform(easting, northing)
-
+    # Display center coordinate as separate table
     center_df = pd.DataFrame([{
         "Latitude": round(lat_center, 10),
         "Longitude": round(lon_center, 10)
     }])
-
     st.markdown("### WGS84 Center Coordinate")
     st.dataframe(center_df)
+
+    # Display circle coordinates
+    st.success("Circle points generated!")
+    st.dataframe(circle_df)
 
     # Map preview with Folium
     midpoint = [circle_df['Latitude'].mean(), circle_df['Longitude'].mean()]
@@ -79,8 +74,16 @@ Longitude: `{lon_center:.10f}`")
         locations=list(zip(circle_df['Latitude'], circle_df['Longitude'])),
         color='blue', weight=3
     ).add_to(m)
-    folium.Marker(location=[circle_df['Latitude'][0], circle_df['Longitude'][0]], popup="Start/End").add_to(m)
-    folium.Marker(location=[lat_center, lon_center], icon=folium.Icon(color='red'), popup="Center WGS84").add_to(m)
+    folium.Marker(
+        location=[circle_df['Latitude'][0], circle_df['Longitude'][0]],
+        popup="Start/End"
+    ).add_to(m)
+    folium.Marker(
+        location=[lat_center, lon_center],
+        popup="Center (WGS84)",
+        icon=folium.Icon(color="red", icon="crosshairs")
+    ).add_to(m)
+
     st_data = st_folium(m, width=700, height=500, returned_objects=["last_object_clicked", "map"])
     st.write("Map interaction data:", st_data)
 
