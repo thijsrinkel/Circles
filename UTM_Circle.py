@@ -39,8 +39,8 @@ st.title("UTM to WGS84 Circle Generator")
 st.write("This tool converts a UTM coordinate to WGS84 and generates a true circle of points around it.")
 
 # Input fields
-easting = st.number_input("Enter Easting (meters):", value=465177.689)
-northing = st.number_input("Enter Northing (meters):", value=5708543.612)
+easting = st.number_input("Enter Easting (meters):", value=0)
+northing = st.number_input("Enter Northing (meters):", value=0)
 utm_zone = st.number_input("Enter UTM Zone:", min_value=1, max_value=60, value=31)
 radius_m = st.number_input("Enter Radius (meters):", value=50)
 num_points = st.number_input("Number of Points:", min_value=3, value=17)
@@ -59,6 +59,18 @@ Longitude: `{lon_center:.10f}`")
 
     st.success("Circle points generated!")
     st.dataframe(circle_df)
+    
+     # Transform and display the center coordinate in WGS84
+    transformer = pyproj.Transformer.from_crs(f"EPSG:{32600 + utm_zone}", "EPSG:4326", always_xy=True)
+    lon_center, lat_center = transformer.transform(easting, northing)
+
+    center_df = pd.DataFrame([{
+        "Latitude": round(lat_center, 10),
+        "Longitude": round(lon_center, 10)
+    }])
+
+    st.markdown("### WGS84 Center Coordinate")
+    st.dataframe(center_df)
 
     # Map preview with Folium
     midpoint = [circle_df['Latitude'].mean(), circle_df['Longitude'].mean()]
