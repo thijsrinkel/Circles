@@ -2,9 +2,8 @@ import streamlit as st
 import pyproj
 import numpy as np
 import pandas as pd
-import folium
-from streamlit_folium import st_folium
 
+# --- Circle generation function ---
 def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_points=17, apply_epoch_correction=False):
     utm_crs = f"EPSG:{32600 + utm_zone}"
     transformer = pyproj.Transformer.from_crs(utm_crs, "EPSG:4326", always_xy=True)
@@ -28,14 +27,16 @@ def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_po
         "Center Latitude": round(center_lat, 10),
         "Center Longitude": round(center_lon, 10)
     })
-    return df, center_lat, center_lon
+    return df
 
 # --- Streamlit App ---
-st.title("UTM Circles to WGS84 (Stable Map Version)")
+st.title("UTM Circles to WGS84 (No Map)")
 
 st.markdown(
-    "Paste UTM coordinates (Easting, Northing) below, one pair per line, comma- or space-separated. "
-    "Example:\n465177.689,5708543.612\n465154.25 5708490.11"
+    "Paste UTM coordinates (Easting, Northing) below, one pair per line, comma- or space-separated.  \n"
+    "**Example:**  \n"
+    "`465177.689,5708543.612`  \n"
+    "`465154.25 5708490.11`"
 )
 
 coord_text = st.text_area("Input Coordinates", height=200)
@@ -47,6 +48,7 @@ apply_correction = st.checkbox("Apply Epoch 2025.5 Correction", value=True)
 if st.button("Generate Circles"):
     lines = coord_text.strip().splitlines()
     coords = []
+    errors = []
 
     for line in lines:
         parts = line.replace(",", " ").split()
@@ -55,51 +57,30 @@ if st.button("Generate Circles"):
                 e, n = float(parts[0]), float(parts[1])
                 coords.append((e, n))
             except ValueError:
-                st.error(f"Invalid numbers in line: {line}")
+                errors.append(f"Invalid number format: {line}")
         else:
-            st.error(f"Line ignored (wrong format): {line}")
+            errors.append(f"Wrong format: {line}")
+
+    if errors:
+        for err in errors:
+            st.error(err)
 
     if coords:
-        all_circles = []
-        first_latlon = None
-
+        all_dfs = []
         for idx, (e, n) in enumerate(coords):
-            circle_df, lat_c, lon_c = generate_circle_from_utm(
+            df = generate_circle_from_utm(
                 e, n, utm_zone, radius_m, num_points, apply_epoch_correction=apply_correction
             )
-            circle_df["Circle ID"] = f"Circle {idx+1}"
-            all_circles.append(circle_df)
-            if first_latlon is None:
-                first_latlon = [lat_c, lon_c]
+            df["Circle ID"] = f"Circle {idx+1}"
+            all_dfs.append(df)
 
-        combined_df = pd.concat(all_circles, ignore_index=True)
-        st.success(f"{len(coords)} circle(s) generated.")
-        st.markdown("### Circle Coordinates")
-        st.dataframe(combined_df)
+        final_df = pd.concat(all_dfs, ignore_index=True)
+        st.success(f"Generated {len(coords)} circle(s) with {num_points} points each.")
+        st.dataframe(final_df)
 
         st.markdown("### 📋 Copy a Column")
-        col_to_copy = st.selectbox("Select column to copy", combined_df.columns)
-        st.text_area("Copy below:", "\n".join(map(str, combined_df[col_to_copy].tolist())), height=200)
+        selected_col = st.selectbox("Select column to copy", final_df.columns)
+        st.text_area("Copy below:", "\n".join(map(str, final_df[selected_col])), height=200)
 
-        # Initialize the map once with real center
-        m = folium.Map(location=first_latlon, zoom_start=17)
-
-        for idx, (e, n) in enumerate(coords):
-            circle_df, lat_c, lon_c = generate_circle_from_utm(
-                e, n, utm_zone, radius_m, num_points, apply_epoch_correction=apply_correction
-            )
-            folium.PolyLine(
-                locations=list(zip(circle_df["Latitude"], circle_df["Longitude"])),
-                color="blue", weight=2, tooltip=f"Circle {idx+1}"
-            ).add_to(m)
-
-            folium.Marker(
-                location=[lat_c, lon_c],
-                popup=f"Center {idx+1}",
-                icon=folium.Icon(color="red", icon="info-sign")
-            ).add_to(m)
-
-        st_folium(m, width=700, height=500)
-
-        csv = combined_df.to_csv(index=False).encode("utf-8")
+        csv = final_df.to_csv(index=False).encode("utf-8")
         st.download_button("Download CSV", csv, "circle_points.csv", "text/csv")
