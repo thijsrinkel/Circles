@@ -5,7 +5,6 @@ import pandas as pd
 import folium
 from streamlit_folium import st_folium
 
-# --- Circle generation function ---
 def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_points=17, apply_epoch_correction=False):
     utm_crs = f"EPSG:{32600 + utm_zone}"
     transformer = pyproj.Transformer.from_crs(utm_crs, "EPSG:4326", always_xy=True)
@@ -32,11 +31,11 @@ def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_po
     return df, center_lat, center_lon
 
 # --- Streamlit App ---
-st.title("UTM Circles to WGS84 (Production Version)")
+st.title("UTM Circles to WGS84 (Stable Map Version)")
 
 st.markdown(
     "Paste UTM coordinates (Easting, Northing) below, one pair per line, comma- or space-separated. "
-    "**Example:**\n465177.689,5708543.612\n465154.25 5708490.11"
+    "Example:\n465177.689,5708543.612\n465154.25 5708490.11"
 )
 
 coord_text = st.text_area("Input Coordinates", height=200)
@@ -62,7 +61,7 @@ if st.button("Generate Circles"):
 
     if coords:
         all_circles = []
-        m = folium.Map(location=[0, 0], zoom_start=2)
+        first_latlon = None
 
         for idx, (e, n) in enumerate(coords):
             circle_df, lat_c, lon_c = generate_circle_from_utm(
@@ -70,7 +69,25 @@ if st.button("Generate Circles"):
             )
             circle_df["Circle ID"] = f"Circle {idx+1}"
             all_circles.append(circle_df)
+            if first_latlon is None:
+                first_latlon = [lat_c, lon_c]
 
+        combined_df = pd.concat(all_circles, ignore_index=True)
+        st.success(f"{len(coords)} circle(s) generated.")
+        st.markdown("### Circle Coordinates")
+        st.dataframe(combined_df)
+
+        st.markdown("### 📋 Copy a Column")
+        col_to_copy = st.selectbox("Select column to copy", combined_df.columns)
+        st.text_area("Copy below:", "\n".join(map(str, combined_df[col_to_copy].tolist())), height=200)
+
+        # Initialize the map once with real center
+        m = folium.Map(location=first_latlon, zoom_start=17)
+
+        for idx, (e, n) in enumerate(coords):
+            circle_df, lat_c, lon_c = generate_circle_from_utm(
+                e, n, utm_zone, radius_m, num_points, apply_epoch_correction=apply_correction
+            )
             folium.PolyLine(
                 locations=list(zip(circle_df["Latitude"], circle_df["Longitude"])),
                 color="blue", weight=2, tooltip=f"Circle {idx+1}"
@@ -82,16 +99,6 @@ if st.button("Generate Circles"):
                 icon=folium.Icon(color="red", icon="info-sign")
             ).add_to(m)
 
-        combined_df = pd.concat(all_circles, ignore_index=True)
-        st.success(f"{len(coords)} circle(s) generated.")
-        st.markdown("### Circle Coordinates")
-        st.dataframe(combined_df)
-
-        st.markdown("### 📋 Copy a Column")
-        col_to_copy = st.selectbox("Select column to copy", combined_df.columns)
-        st.text_area("Copy below:", "\n".join(map(str, combined_df[col_to_copy].tolist())), height=200)
-
-        m.location = [combined_df["Center Latitude"].iloc[0], combined_df["Center Longitude"].iloc[0]]
         st_folium(m, width=700, height=500)
 
         csv = combined_df.to_csv(index=False).encode("utf-8")
