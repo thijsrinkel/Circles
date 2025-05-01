@@ -42,20 +42,24 @@ radius_m = st.number_input("Radius (m)", value=50)
 num_points = st.number_input("Points per Circle", min_value=3, value=17)
 apply_correction = st.checkbox("Apply Epoch 2025.5 Correction", value=True)
 
-circle_inputs = []
-for i in range(num_circles):
-    with st.expander(f"Circle {i+1} Input"):
-        e = st.number_input(f"Easting {i+1}", key=f"e_{i}")
-        n = st.number_input(f"Northing {i+1}", key=f"n_{i}")
-        circle_inputs.append((e, n))
+# Use form to preserve input state
+with st.form("circle_form"):
+    circle_inputs = []
+    for i in range(num_circles):
+        with st.expander(f"Circle {i+1} Input"):
+            e = st.number_input(f"Easting {i+1}", key=f"e_{i}")
+            n = st.number_input(f"Northing {i+1}", key=f"n_{i}")
+            circle_inputs.append((e, n))
+    submit = st.form_submit_button("Generate Circles")
 
-if st.button("Generate Circles"):
+# On form submit
+if submit:
     all_circles = []
     map_center = [0, 0]
     m = folium.Map(location=[0, 0], zoom_start=2)
-    
+
     for idx, (e, n) in enumerate(circle_inputs):
-        circle_df, lat_c, lon_c = generate_circle_from_utm(e, n, utm_zone, radius_m, num_points, apply_correction)
+        circle_df, lat_c, lon_c = generate_circle_from_utm(e, n, utm_zone, radius_m, num_points, apply_epoch_correction=apply_correction)
         circle_df["Circle ID"] = f"Circle {idx+1}"
         all_circles.append(circle_df)
 
@@ -72,6 +76,7 @@ if st.button("Generate Circles"):
 
     combined_df = pd.concat(all_circles, ignore_index=True)
     st.success(f"{num_circles} circle(s) generated.")
+    st.markdown("### Circle Coordinates")
     st.dataframe(combined_df)
 
     # Column copy interface
