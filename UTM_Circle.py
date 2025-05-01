@@ -1,3 +1,9 @@
+# Final version with:
+# - Repeated first point to close circle
+# - Center coordinates shown above each circle
+# - Hidden DataFrame index
+# - Removed copy column functionality
+
 import streamlit as st
 import pyproj
 import numpy as np
@@ -26,14 +32,13 @@ def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_po
         "Longitude": np.round(lons, 10)
     })
 
-    # ✅ Add first point again to close the loop
+    # Add first point again to close the loop
     df = pd.concat([df, df.iloc[[0]]], ignore_index=True)
 
     return df, round(center_lat, 10), round(center_lon, 10)
 
-
 # --- Streamlit App ---
-st.title("UTM Coordinate to WGS84 Circle")
+st.title("UTM Circles to WGS84 (One Table per Circle)")
 
 st.markdown(
     "Paste UTM coordinates (Easting, Northing) below, one pair per line, comma- or space-separated.  \n"
@@ -77,6 +82,15 @@ if st.button("Generate Circles"):
                 e, n, utm_zone, radius_m, num_points, apply_epoch_correction=apply_correction
             )
             label = f"Circle {idx+1}"
+
+            # Show center coordinates above each circle
+            st.markdown(f"### {label} Center")
+            st.dataframe(pd.DataFrame([{
+                "Latitude": lat_c,
+                "Longitude": lon_c
+            }]), use_container_width=True, hide_index=True)
+
+            # Show circle coordinates
             st.markdown(f"### {label} Coordinates")
             st.dataframe(df, use_container_width=True, hide_index=True)
 
@@ -84,9 +98,9 @@ if st.button("Generate Circles"):
             circle_tables.append(df)
             center_rows.append({"Circle ID": label, "Latitude": lat_c, "Longitude": lon_c})
 
-        # Show centers table
+        # Summary table of all centers (optional)
+        st.markdown("### All Center Coordinates Summary")
         center_df = pd.DataFrame(center_rows)
-        st.markdown("### WGS84 Center Coordinates")
         st.dataframe(center_df, use_container_width=True, hide_index=True)
 
         # Download combined points CSV
