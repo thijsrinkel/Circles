@@ -25,7 +25,12 @@ def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_po
         "Latitude": np.round(lats, 10),
         "Longitude": np.round(lons, 10)
     })
+
+    # ✅ Add first point again to close the loop
+    df = pd.concat([df, df.iloc[[0]]], ignore_index=True)
+
     return df, round(center_lat, 10), round(center_lon, 10)
+
 
 # --- Streamlit App ---
 st.title("UTM Circles to WGS84 (Final Version - No Copy Box)")
