@@ -5,93 +5,86 @@ import pandas as pd
 import folium
 from streamlit_folium import st_folium
 
-# Define the correct circle generation function (stay in UTM and then transform)
+# --- Circle generation function ---
 def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_points=17, apply_epoch_correction=False):
-    utm_crs = f"EPSG:{32600 + utm_zone}"  # Proper UTM EPSG code (e.g., 32631 for zone 31N)
+    utm_crs = f"EPSG:{32600 + utm_zone}"
     transformer = pyproj.Transformer.from_crs(utm_crs, "EPSG:4326", always_xy=True)
 
-    # Apply approximate epoch correction if needed (assume 2.5 cm/year eastward, 1.5 cm/year northward for Europe)
+    # Epoch correction
     if apply_epoch_correction:
         years_since_1984 = 2025.5 - 1984.0
-        east_shift_m = 0.025 * years_since_1984  # meters
-        north_shift_m = 0.015 * years_since_1984  # meters
-        easting += east_shift_m
-        northing += north_shift_m
+        easting += 0.025 * years_since_1984
+        northing += 0.015 * years_since_1984
 
     angles_deg = np.linspace(0, 360, num_points)
     angles_rad = np.radians(angles_deg)
-
-    # Generate points directly in UTM meters
     eastings = easting + radius_m * np.cos(angles_rad)
     northings = northing + radius_m * np.sin(angles_rad)
-
-    # Transform all UTM points to WGS84 lat/lon
     lons, lats = transformer.transform(np.array(eastings), np.array(northings))
+    center_lon, center_lat = transformer.transform(easting, northing)
 
-    return pd.DataFrame({
+    df = pd.DataFrame({
         "Angle (°)": np.round(angles_deg, 6),
         "Latitude": np.round(lats, 10),
-        "Longitude": np.round(lons, 10)
-    }), transformer.transform(easting, northing)  # Also return center in WGS84
+        "Longitude": np.round(lons, 10),
+        "Center Latitude": round(center_lat, 10),
+        "Center Longitude": round(center_lon, 10)
+    })
+    return df, center_lat, center_lon
 
+# --- Streamlit UI ---
+st.title("Multiple UTM Circles to WGS84")
+st.write("Generate multiple WGS84 circles from UTM centers with radius and epoch correction.")
 
-# Streamlit UI
-st.title("UTM to WGS84 Circle Generator")
-st.write("This tool converts a UTM coordinate to WGS84 and generates a true circle of points around it.")
+num_circles = st.number_input("Number of Circles", min_value=1, max_value=10, value=1)
+utm_zone = st.number_input("UTM Zone", min_value=1, max_value=60, value=31)
+radius_m = st.number_input("Radius (m)", value=50)
+num_points = st.number_input("Points per Circle", min_value=3, value=17)
+apply_correction = st.checkbox("Apply Epoch 2025.5 Correction", value=True)
 
-# Input fields
-easting = st.number_input("Enter Easting (meters):", value=465177.689)
-northing = st.number_input("Enter Northing (meters):", value=5708543.612)
-utm_zone = st.number_input("Enter UTM Zone:", min_value=1, max_value=60, value=31)
-radius_m = st.number_input("Enter Radius (meters):", value=50)
-num_points = st.number_input("Number of Points:", min_value=3, value=17)
-apply_correction = st.checkbox("Apply Epoch 2025.5 Correction?", value=True)
+circle_inputs = []
+for i in range(num_circles):
+    with st.expander(f"Circle {i+1} Input"):
+        e = st.number_input(f"Easting {i+1}", key=f"e_{i}")
+        n = st.number_input(f"Northing {i+1}", key=f"n_{i}")
+        circle_inputs.append((e, n))
 
-if st.button("Generate Circle"):
-    circle_df, (lon_center, lat_center) = generate_circle_from_utm(
-        easting, northing, utm_zone, radius_m, num_points, apply_epoch_correction=apply_correction
-    )
+if st.button("Generate Circles"):
+    all_circles = []
+    map_center = [0, 0]
+    m = folium.Map(location=[0, 0], zoom_start=2)
+    
+    for idx, (e, n) in enumerate(circle_inputs):
+        circle_df, lat_c, lon_c = generate_circle_from_utm(e, n, utm_zone, radius_m, num_points, apply_correction)
+        circle_df["Circle ID"] = f"Circle {idx+1}"
+        all_circles.append(circle_df)
 
-    # Add the first point again to close the loop
-    circle_df = pd.concat([circle_df, circle_df.iloc[[0]]], ignore_index=True)
+        # Draw on map
+        folium.PolyLine(
+            locations=list(zip(circle_df["Latitude"], circle_df["Longitude"])),
+            color="blue", weight=2, tooltip=f"Circle {idx+1}"
+        ).add_to(m)
+        folium.Marker(
+            location=[lat_c, lon_c],
+            popup=f"Center {idx+1}",
+            icon=folium.Icon(color="red", icon="info-sign")
+        ).add_to(m)
 
-    # Display center coordinate as separate table
-    center_df = pd.DataFrame([{
-        "Latitude": round(lat_center, 10),
-        "Longitude": round(lon_center, 10)
-    }])
-    st.markdown("### WGS84 Center Coordinate")
-    st.dataframe(center_df)
+    combined_df = pd.concat(all_circles, ignore_index=True)
+    st.success(f"{num_circles} circle(s) generated.")
+    st.dataframe(combined_df)
 
-    # Display circle coordinates
-    st.success("Circle points generated!")
-    st.dataframe(circle_df)
+    # Column copy interface
+    st.markdown("### 📋 Copy a Column")
+    column_to_copy = st.selectbox("Select column to copy", combined_df.columns)
+    st.text_area("Copy below:", "\n".join(map(str, combined_df[column_to_copy].tolist())), height=200)
 
-    # Map preview with Folium
-    midpoint = [circle_df['Latitude'].mean(), circle_df['Longitude'].mean()]
-    m = folium.Map(location=midpoint, zoom_start=17)
-    folium.PolyLine(
-        locations=list(zip(circle_df['Latitude'], circle_df['Longitude'])),
-        color='blue', weight=3
-    ).add_to(m)
-    folium.Marker(
-        location=[circle_df['Latitude'][0], circle_df['Longitude'][0]],
-        popup="Start/End"
-    ).add_to(m)
-    folium.Marker(
-        location=[lat_center, lon_center],
-        popup="Center (WGS84)",
-        icon=folium.Icon(color="red", icon="crosshairs")
-    ).add_to(m)
+    # Map display
+    center_lat = combined_df["Center Latitude"].iloc[0]
+    center_lon = combined_df["Center Longitude"].iloc[0]
+    m.location = [center_lat, center_lon]
+    st_folium(m, width=700, height=500)
 
-    st_data = st_folium(m, width=700, height=500, returned_objects=["last_object_clicked", "map"])
-    st.write("Map interaction data:", st_data)
-
-    # Download as CSV
-    csv = circle_df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="Download Circle Points as CSV",
-        data=csv,
-        file_name='circle_points.csv',
-        mime='text/csv'
-    )
+    # Download
+    csv = combined_df.to_csv(index=False).encode("utf-8")
+    st.download_button("Download CSV", csv, "multi_circle_points.csv", "text/csv")
