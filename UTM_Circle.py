@@ -28,7 +28,7 @@ def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_po
     return df, round(center_lat, 10), round(center_lon, 10)
 
 # --- Streamlit App ---
-st.title("UTM Circles to WGS84 (Per-Circle Output)")
+st.title("UTM Circles to WGS84 (Final Version - No Copy Box)")
 
 st.markdown(
     "Paste UTM coordinates (Easting, Northing) below, one pair per line, comma- or space-separated.  \n"
@@ -74,11 +74,6 @@ if st.button("Generate Circles"):
             label = f"Circle {idx+1}"
             st.markdown(f"### {label} Coordinates")
             st.dataframe(df, use_container_width=True)
-
-            st.markdown(f"📋 Copy a Column from {label}")
-            selected_col = st.selectbox(f"Select column to copy for {label}", df.columns, key=f"col_{idx}")
-            copy_text = "\n".join(map(str, df[selected_col].tolist()))
-            st.text_area(f"Copy column '{selected_col}' below", copy_text, height=200, key=f"ta_{idx}")
 
             df["Circle ID"] = label
             circle_tables.append(df)
