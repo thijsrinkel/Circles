@@ -39,14 +39,20 @@ st.title("UTM to WGS84 Circle Generator")
 st.write("This tool converts a UTM coordinate to WGS84 and generates a true circle of points around it.")
 
 # Input fields
-easting = st.number_input("Enter Easting (meters):", value=)
-northing = st.number_input("Enter Northing (meters):", value=)
+easting = st.number_input("Enter Easting (meters):", value=465177.689)
+northing = st.number_input("Enter Northing (meters):", value=5708543.612)
 utm_zone = st.number_input("Enter UTM Zone:", min_value=1, max_value=60, value=31)
 radius_m = st.number_input("Enter Radius (meters):", value=50)
 num_points = st.number_input("Number of Points:", min_value=3, value=17)
-apply_correction = st.checkbox("Apply Epoch 2025.5 Correction?", value=True)
+apply_correction = st.checkbox("Apply Epoch 2025.5 Correction?", value=False)
 
 if st.button("Generate Circle"):
+    # Transform and display the center coordinate in WGS84
+    transformer = pyproj.Transformer.from_crs(f"EPSG:{32600 + utm_zone}", "EPSG:4326", always_xy=True)
+    lon_center, lat_center = transformer.transform(easting, northing)
+    st.markdown(f"**WGS84 Center Coordinate:**  
+Latitude: `{lat_center:.10f}`  
+Longitude: `{lon_center:.10f}`")
     circle_df = generate_circle_from_utm(easting, northing, utm_zone, radius_m, num_points, apply_epoch_correction=apply_correction)
     # Add the first point again to close the loop
     circle_df = pd.concat([circle_df, circle_df.iloc[[0]]], ignore_index=True)
@@ -62,6 +68,7 @@ if st.button("Generate Circle"):
         color='blue', weight=3
     ).add_to(m)
     folium.Marker(location=[circle_df['Latitude'][0], circle_df['Longitude'][0]], popup="Start/End").add_to(m)
+    folium.Marker(location=[lat_center, lon_center], icon=folium.Icon(color='red'), popup="Center WGS84").add_to(m)
     st_data = st_folium(m, width=700, height=500, returned_objects=["last_object_clicked", "map"])
     st.write("Map interaction data:", st_data)
 
