@@ -28,7 +28,7 @@ def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_po
     return df, round(center_lat, 10), round(center_lon, 10)
 
 # --- Streamlit App ---
-st.title("UTM Circles to WGS84 (Stable Final Version)")
+st.title("UTM Circles to WGS84 (Per-Circle Output)")
 
 st.markdown(
     "Paste UTM coordinates (Easting, Northing) below, one pair per line, comma- or space-separated.  \n"
@@ -64,34 +64,36 @@ if st.button("Generate Circles"):
             st.error(err)
 
     if coords:
-        all_dfs = []
-        centers = []
+        center_rows = []
+        circle_tables = []
 
         for idx, (e, n) in enumerate(coords):
             df, lat_c, lon_c = generate_circle_from_utm(
                 e, n, utm_zone, radius_m, num_points, apply_epoch_correction=apply_correction
             )
-            df["Circle ID"] = f"Circle {idx+1}"
-            all_dfs.append(df)
-            centers.append({"Circle ID": f"Circle {idx+1}", "Latitude": lat_c, "Longitude": lon_c})
+            label = f"Circle {idx+1}"
+            st.markdown(f"### {label} Coordinates")
+            st.dataframe(df, use_container_width=True)
 
-        final_df = pd.concat(all_dfs, ignore_index=True)
-        center_df = pd.DataFrame(centers)
+            st.markdown(f"📋 Copy a Column from {label}")
+            selected_col = st.selectbox(f"Select column to copy for {label}", df.columns, key=f"col_{idx}")
+            copy_text = "\n".join(map(str, df[selected_col].tolist()))
+            st.text_area(f"Copy column '{selected_col}' below", copy_text, height=200, key=f"ta_{idx}")
 
-        st.success(f"Generated {len(coords)} circle(s) with {num_points} points each.")
-        st.markdown("### Circle Coordinates")
-        st.dataframe(final_df)
+            df["Circle ID"] = label
+            circle_tables.append(df)
+            center_rows.append({"Circle ID": label, "Latitude": lat_c, "Longitude": lon_c})
 
-        st.markdown("### WGS84 Center Coordinates (one per circle)")
+        # Show centers table
+        center_df = pd.DataFrame(center_rows)
+        st.markdown("### WGS84 Center Coordinates")
         st.dataframe(center_df)
 
-        st.markdown("### 📋 Copy a Column")
-        selected_col = st.selectbox("Select column to copy", final_df.columns)
-        try:
-            copy_content = "\n".join(map(str, final_df[selected_col].dropna()))
-            st.text_area("Copy below:", copy_content, height=200)
-        except Exception as e:
-            st.warning(f"Unable to copy selected column: {e}")
+        # Download combined points CSV
+        combined_df = pd.concat(circle_tables, ignore_index=True)
+        csv = combined_df.to_csv(index=False).encode("utf-8")
+        st.download_button("Download All Circle Points as CSV", csv, "circle_points.csv", "text/csv")
 
-        csv = final_df.to_csv(index=False).encode("utf-8")
-        st.download_button("Download CSV", csv, "circle_points.csv", "text/csv")
+        # Download center coordinates CSV
+        center_csv = center_df.to_csv(index=False).encode("utf-8")
+        st.download_button("Download Center Coordinates as CSV", center_csv, "circle_centers.csv", "text/csv")
