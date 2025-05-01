@@ -31,75 +31,68 @@ def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_po
     })
     return df, center_lat, center_lon
 
-# --- Streamlit UI ---
-st.title("Multiple UTM Circles to WGS84")
-st.write("Generate multiple WGS84 circles from UTM centers with radius and epoch correction.")
+# --- Streamlit App ---
+st.title("UTM Circles to WGS84 (Production Version)")
 
-# Global input
-num_circles = st.number_input("Number of Circles", min_value=1, max_value=10, value=1)
+st.markdown(
+    "Paste UTM coordinates (Easting, Northing) below, one pair per line, comma- or space-separated. "
+    "**Example:**\n465177.689,5708543.612\n465154.25 5708490.11"
+)
+
+coord_text = st.text_area("Input Coordinates", height=200)
 utm_zone = st.number_input("UTM Zone", min_value=1, max_value=60, value=31)
-radius_m = st.number_input("Radius (m)", value=50)
+radius_m = st.number_input("Circle Radius (m)", value=50)
 num_points = st.number_input("Points per Circle", min_value=3, value=17)
 apply_correction = st.checkbox("Apply Epoch 2025.5 Correction", value=True)
 
-# --- Session state setup for persistent inputs ---
-if "circle_inputs" not in st.session_state:
-    st.session_state.circle_inputs = [{"e": 0.0, "n": 0.0} for _ in range(10)]
+if st.button("Generate Circles"):
+    lines = coord_text.strip().splitlines()
+    coords = []
 
-# Extend if user requests more circles
-if len(st.session_state.circle_inputs) < num_circles:
-    st.session_state.circle_inputs.extend([{"e": 0.0, "n": 0.0}] * (num_circles - len(st.session_state.circle_inputs)))
+    for line in lines:
+        parts = line.replace(",", " ").split()
+        if len(parts) == 2:
+            try:
+                e, n = float(parts[0]), float(parts[1])
+                coords.append((e, n))
+            except ValueError:
+                st.error(f"Invalid numbers in line: {line}")
+        else:
+            st.error(f"Line ignored (wrong format): {line}")
 
-# --- Input Form ---
-with st.form("circle_form"):
-    for i in range(num_circles):
-        with st.expander(f"Circle {i+1} Input"):
-            st.session_state.circle_inputs[i]["e"] = st.number_input(
-                f"Easting {i+1}", key=f"e_{i}", value=st.session_state.circle_inputs[i]["e"])
-            st.session_state.circle_inputs[i]["n"] = st.number_input(
-                f"Northing {i+1}", key=f"n_{i}", value=st.session_state.circle_inputs[i]["n"])
-    submit = st.form_submit_button("Generate Circles")
+    if coords:
+        all_circles = []
+        m = folium.Map(location=[0, 0], zoom_start=2)
 
-# --- On Submit: Process All Circles ---
-if submit:
-    circle_inputs = [(entry["e"], entry["n"]) for entry in st.session_state.circle_inputs[:num_circles]]
-    all_circles = []
-    m = folium.Map(location=[0, 0], zoom_start=2)
+        for idx, (e, n) in enumerate(coords):
+            circle_df, lat_c, lon_c = generate_circle_from_utm(
+                e, n, utm_zone, radius_m, num_points, apply_epoch_correction=apply_correction
+            )
+            circle_df["Circle ID"] = f"Circle {idx+1}"
+            all_circles.append(circle_df)
 
-    for idx, (e, n) in enumerate(circle_inputs):
-        circle_df, lat_c, lon_c = generate_circle_from_utm(
-            e, n, utm_zone, radius_m, num_points, apply_epoch_correction=apply_correction
-        )
-        circle_df["Circle ID"] = f"Circle {idx+1}"
-        all_circles.append(circle_df)
+            folium.PolyLine(
+                locations=list(zip(circle_df["Latitude"], circle_df["Longitude"])),
+                color="blue", weight=2, tooltip=f"Circle {idx+1}"
+            ).add_to(m)
 
-        # Draw on map
-        folium.PolyLine(
-            locations=list(zip(circle_df["Latitude"], circle_df["Longitude"])),
-            color="blue", weight=2, tooltip=f"Circle {idx+1}"
-        ).add_to(m)
-        folium.Marker(
-            location=[lat_c, lon_c],
-            popup=f"Center {idx+1}",
-            icon=folium.Icon(color="red", icon="info-sign")
-        ).add_to(m)
+            folium.Marker(
+                location=[lat_c, lon_c],
+                popup=f"Center {idx+1}",
+                icon=folium.Icon(color="red", icon="info-sign")
+            ).add_to(m)
 
-    combined_df = pd.concat(all_circles, ignore_index=True)
-    st.success(f"{num_circles} circle(s) generated.")
-    st.markdown("### Circle Coordinates")
-    st.dataframe(combined_df)
+        combined_df = pd.concat(all_circles, ignore_index=True)
+        st.success(f"{len(coords)} circle(s) generated.")
+        st.markdown("### Circle Coordinates")
+        st.dataframe(combined_df)
 
-    # Column copy interface
-    st.markdown("### 📋 Copy a Column")
-    column_to_copy = st.selectbox("Select column to copy", combined_df.columns)
-    st.text_area("Copy below:", "\n".join(map(str, combined_df[column_to_copy].tolist())), height=200)
+        st.markdown("### 📋 Copy a Column")
+        col_to_copy = st.selectbox("Select column to copy", combined_df.columns)
+        st.text_area("Copy below:", "\n".join(map(str, combined_df[col_to_copy].tolist())), height=200)
 
-    # Map display
-    center_lat = combined_df["Center Latitude"].iloc[0]
-    center_lon = combined_df["Center Longitude"].iloc[0]
-    m.location = [center_lat, center_lon]
-    st_folium(m, width=700, height=500)
+        m.location = [combined_df["Center Latitude"].iloc[0], combined_df["Center Longitude"].iloc[0]]
+        st_folium(m, width=700, height=500)
 
-    # Download
-    csv = combined_df.to_csv(index=False).encode("utf-8")
-    st.download_button("Download CSV", csv, "multi_circle_points.csv", "text/csv")
+        csv = combined_df.to_csv(index=False).encode("utf-8")
+        st.download_button("Download CSV", csv, "circle_points.csv", "text/csv")
