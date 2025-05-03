@@ -39,6 +39,7 @@ def generate_circle_from_utm(easting, northing, utm_zone=31, radius_m=50, num_po
 
 # --- Streamlit App ---
 st.title("UTM Point to WGS84 Circles")
+
 st.image("logo.png", width=200)
 
 st.markdown(
